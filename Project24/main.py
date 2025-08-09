@@ -27,8 +27,11 @@ target_update_freq = 3
 
 
 model_dir = 'saved_model'
+
 weights_path_a = os.path.join(model_dir, "football_dqn_a.weights.h5")
 weights_path_b = os.path.join(model_dir, "football_dqn_b.weights.h5")
+buffer_path_a = os.path.join(model_dir,"replay_buffer_a.npz")
+buffer_path_b = os.path.join(model_dir,"replay_buffer_b.npz")
 
 
 os.makedirs(model_dir, exist_ok=True)
@@ -79,6 +82,27 @@ class ReplayBuffer:
         return states, actions, rewards, next_states, dones
 
 
+def save_buffer(buffer, path):
+    np.savez(
+        path,
+        states=np.vstack([s[0] for s in buffer.buffer]),
+        actions=np.array([s[1] for s in buffer.buffer]),
+        rewards=np.array([s[2] for s in buffer.buffer]),
+        next_states=np.vstack([s[3] for s in buffer.buffer]),
+        dones=np.array([s[4] for s in buffer.buffer]),
+    )
+
+def load_buffer(buffer, path):
+    data = np.load(path)
+    buffer.buffer = list(zip(
+        data["states"],
+        data["actions"],
+        data["rewards"],
+        data["next_states"],
+        data["dones"],
+    ))
+
+
 
 model_a = DQN(num_actions, state_dim)
 target_model_a = DQN(num_actions, state_dim)
@@ -107,8 +131,20 @@ if os.path.exists(weights_path_b):
     target_model_b.set_weights(model_b.get_weights())
     print("Модель B загружена из", weights_path_b)
 
+
+
 buffer_a = ReplayBuffer()
 buffer_b = ReplayBuffer()
+
+
+
+if os.path.exists(buffer_path_a):
+    load_buffer(buffer_a,buffer_path_a)
+
+if os.path.exists(buffer_path_b):
+    load_buffer(buffer_b,buffer_path_b)
+
+
 
 def select_action_a(state, epsilon):
     if np.random.rand() < epsilon:
@@ -225,6 +261,8 @@ def train():
             target_model_b.set_weights(model_b.get_weights())
             target_model_a.save_weights(weights_path_a)
             target_model_b.save_weights(weights_path_b)
+            save_buffer(buffer_a,buffer_path_a)
+            save_buffer(buffer_b,buffer_path_b)
             tf.keras.backend.clear_session()
             gc.collect()
 
@@ -244,3 +282,5 @@ except KeyboardInterrupt:
     print('stop')
     target_model_a.save_weights(weights_path_a)
     target_model_b.save_weights(weights_path_b)
+    save_buffer(buffer_a,buffer_path_a)
+    save_buffer(buffer_b,buffer_path_b)
